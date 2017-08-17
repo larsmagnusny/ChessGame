@@ -56,7 +56,7 @@ void AChessPlayerController::UpdateHighlight(FHitResult &Hit)
 				LastChessPiece->RemoveHighlight();
 				LastHighlightedActor = nullptr;
 			}
-			else
+			else if(GameMode->CurrentPlayer == ChessPiece->type)
 			{
 				ChessPiece->ToggleHighlight();
 				LastHighlightedActor = Hit.Actor.Get();
@@ -123,7 +123,6 @@ int AChessPlayerController::GetSlotIndexFromWorld(FVector HitPoint, int& I, int 
 			{
 				if (HitPoint.Y >= GameMode->BoardInstance.Slots[i][j].Position.Y - GameMode->BoardInstance.Slots[i][j].Top && HitPoint.Y <= GameMode->BoardInstance.Slots[i][j].Position.Y + GameMode->BoardInstance.Slots[i][j].Bottom)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("Inside Square i: %s, j: %s"), *FString::FromInt(i), *FString::FromInt(j));
 					I = i;
 					J = j;
 					HoveringOverSlot = true;
@@ -150,32 +149,61 @@ void AChessPlayerController::MouseLeftClick()
 	if (Hit.Actor != nullptr)
 	{
 		AChessPiece* ChessPiece = Cast<AChessPiece>(Hit.Actor.Get());
+		AChessPiece* LastChessPiece = nullptr;
+
+		if (LastSelectedActor != nullptr)
+			LastChessPiece = Cast<AChessPiece>(LastSelectedActor);
 
 		if (GameMode->IsClickable(Hit.Actor.Get()))
 		{
 			if (LastSelectedActor != Hit.Actor.Get() && LastSelectedActor != nullptr)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Removing Toggle!"));
-				AChessPiece* LastChessPiece = Cast<AChessPiece>(LastSelectedActor);
+				if (LastChessPiece->type == ChessPiece->type)
+				{
+					// Remove Selection and Board Highlighting
+					RemoveHighlighting(LastChessPiece);
+				}
+				else
+				{
+					if (LastChessPiece->isValidMove(ChessPiece->CurrentSlotI, ChessPiece->CurrentSlotJ))
+					{
+						int SlotToMoveToI = ChessPiece->CurrentSlotI;
+						int SlotToMoveToJ = ChessPiece->CurrentSlotJ;
+						if (GameMode->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant != nullptr)
+						{
+							GameMode->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant->Destroy();
+							GameMode->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant = nullptr;
+						}
 
-				LastChessPiece->RemoveSelected();
-				LastSelectedActor = nullptr;
-				GameMode->CurrentlySelectedActor = nullptr;
-				Cast<UChessHighlightController>(GameMode->HighlightController)->SetAllOff();
-				Cast<AChessPiece>(LastMovesHighlightedActor)->MovesAreHighlighted = false;
+						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
+						LastChessPiece->CurrentSlotI = SlotToMoveToI;
+						LastChessPiece->CurrentSlotJ = SlotToMoveToJ;
+						LastChessPiece->isOnStartingSquare = false;
+						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
+
+						// Remove Selection and Board Highlighting
+						RemoveHighlighting(LastChessPiece);
+
+						GameMode->CurrentPlayer = !GameMode->CurrentPlayer;
+						GameMode->RunCameraAnimation = true;
+						return;
+					}
+					else
+					{
+						// Remove Selection and Board Highlighting
+						RemoveHighlighting(LastChessPiece);
+						return;
+					}
+				}
 			}
 
 			if (LastSelectedActor == Hit.Actor.Get() && LastSelectedActor != nullptr)
 			{
-				ChessPiece->RemoveSelected();
-				LastSelectedActor = nullptr;
-				GameMode->CurrentlySelectedActor = nullptr;
-				Cast<UChessHighlightController>(GameMode->HighlightController)->SetAllOff();
-				Cast<AChessPiece>(LastMovesHighlightedActor)->MovesAreHighlighted = false;
+				// Remove Selection and Board Highlighting
+				RemoveHighlighting(ChessPiece);
 			}
-			else
+			else if(GameMode->CurrentPlayer == ChessPiece->type)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Highlighting new object!"));
 				ChessPiece->ToggleSelected();
 				GameMode->CurrentlySelectedActor = ChessPiece;
 				LastSelectedActor = ChessPiece;
@@ -196,20 +224,26 @@ void AChessPlayerController::MouseLeftClick()
 
 					if (LastChessPiece->isValidMove(SlotPointedAtI, SlotPointedAtJ))
 					{
+						// Check if there is a chesspiece in the spot you want to move, so you can take it.
+						if (GameMode->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant != nullptr)
+						{
+							GameMode->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant->Destroy();
+							GameMode->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant = nullptr;
+						}
+
 						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
 						LastChessPiece->CurrentSlotI = SlotPointedAtI;
 						LastChessPiece->CurrentSlotJ = SlotPointedAtJ;
+						LastChessPiece->isOnStartingSquare = false;
 						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
+
+						GameMode->CurrentPlayer = !GameMode->CurrentPlayer;
+						GameMode->RunCameraAnimation = true;
 					}
 				}
 
-				UE_LOG(LogTemp, Warning, TEXT("Removing Toggle!"));
 				// Remove Selection and Board Highlighting
-				LastChessPiece->RemoveSelected();
-				LastSelectedActor = nullptr;
-				GameMode->CurrentlySelectedActor = nullptr;
-				Cast<UChessHighlightController>(GameMode->HighlightController)->SetAllOff();
-				Cast<AChessPiece>(LastMovesHighlightedActor)->MovesAreHighlighted = false;
+				RemoveHighlighting(LastChessPiece);
 			}
 		}
 	}
@@ -217,14 +251,19 @@ void AChessPlayerController::MouseLeftClick()
 	{
 		if (LastSelectedActor != nullptr)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Removing Toggle!"));
 			AChessPiece* LastChessPiece = Cast<AChessPiece>(LastSelectedActor);
 
-			LastChessPiece->RemoveSelected();
-			LastSelectedActor = nullptr;
-			GameMode->CurrentlySelectedActor = nullptr;
-			Cast<UChessHighlightController>(GameMode->HighlightController)->SetAllOff();
-			Cast<AChessPiece>(LastMovesHighlightedActor)->MovesAreHighlighted = false;
+			// Remove Selection and Board Highlighting
+			RemoveHighlighting(LastChessPiece);
 		}
 	}
+}
+
+void AChessPlayerController::RemoveHighlighting(AChessPiece * LastChessPiece)
+{
+	LastChessPiece->RemoveSelected();
+	LastSelectedActor = nullptr;
+	GameMode->CurrentlySelectedActor = nullptr;
+	Cast<UChessHighlightController>(GameMode->HighlightController)->SetAllOff();
+	Cast<AChessPiece>(LastMovesHighlightedActor)->MovesAreHighlighted = false;
 }

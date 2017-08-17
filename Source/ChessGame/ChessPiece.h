@@ -39,6 +39,7 @@ public:
 	bool Selected = false;
 
 	bool MovesAreHighlighted = false;
+	bool isOnStartingSquare = true;
 
 	int type = 0;
 	UStaticMesh* Mesh = nullptr;

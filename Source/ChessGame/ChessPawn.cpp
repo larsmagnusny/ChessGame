@@ -11,7 +11,7 @@ AChessPawn::AChessPawn()
 	PrimaryActorTick.bCanEverTick = true;
 
 	bool AllSuccessfull = true;
-	const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Bonde.Bonde'"));
+	const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Pawn.Pawn'"));
 	
 	if (!MeshLoader.Succeeded())
 		AllSuccessfull = false;
@@ -29,12 +29,14 @@ void AChessPawn::BeginPlay()
 	if (!type)
 	{
 		AllowedMoves.Add(FVector2D(0, 1));
+		AllowedMoves.Add(FVector2D(0, 2));
 		AllowedMoves.Add(FVector2D(1, 1));
 		AllowedMoves.Add(FVector2D(-1, 1));
 	}
 	else
 	{
 		AllowedMoves.Add(FVector2D(0, -1));
+		AllowedMoves.Add(FVector2D(0, -2));
 		AllowedMoves.Add(FVector2D(1, -1));
 		AllowedMoves.Add(FVector2D(-1, -1));
 	}
@@ -85,15 +87,43 @@ void AChessPawn::GetPossibleMoveHighlight(TArray<int>& indexes)
 			
 			AChessPiece* ChessPiece = Cast<AChessPiece>(GetActorFromSlot(NextI, NextJ));
 
-			if(!isPieceInSlot(NextI, NextJ) && NextI - CurrentSlotI != 0 && NextJ - CurrentSlotJ == 0)
-				indexes.Add(ToOneDimentional(NextI, NextJ));
-			else if (ChessPiece != nullptr)
+			if (FMath::Abs(AllowedMoves[i].Y) == 2 && isOnStartingSquare)
 			{
-				if (ChessPiece->type != this->type && NextI - CurrentSlotI != 0 && NextJ - CurrentSlotJ != 0)
+				for (int y = 1; y <= 2; y++)
 				{
-					indexes.Add(ToOneDimentional(NextI, NextJ));
+					int SlotNI = CurrentSlotI + FMath::Sign<float>(AllowedMoves[i].Y)*y;
+					int SlotNJ = CurrentSlotJ;
+
+					AChessPiece* ChessPiece1 = Cast<AChessPiece>(GetActorFromSlot(SlotNI, SlotNJ));
+					if (ChessPiece1 != nullptr)
+					{
+						if (ChessPiece1->type != this->type)
+						{
+							y = 3;
+						}
+						else
+						{
+							y = 3;
+						}
+					}
+					else
+					{
+						indexes.Add(ToOneDimentional(SlotNI, SlotNJ));
+					}
 				}
-			}	
+			}
+			else
+			{
+				if (!isPieceInSlot(NextI, NextJ) && NextI - CurrentSlotI != 0 && NextJ - CurrentSlotJ == 0 && FMath::Abs(AllowedMoves[i].Y) != 2)
+					indexes.Add(ToOneDimentional(NextI, NextJ));
+				else if (ChessPiece != nullptr)
+				{
+					if (ChessPiece->type != this->type && NextI - CurrentSlotI != 0 && NextJ - CurrentSlotJ != 0 && FMath::Abs(AllowedMoves[i].Y) != 2)
+					{
+						indexes.Add(ToOneDimentional(NextI, NextJ));
+					}
+				}
+			}
 		}
 	}
 }
@@ -115,13 +145,33 @@ bool AChessPawn::isValidMove(int IndexToMoveToI, int IndexToMoveToJ)
 		float DeltaY = IndexToMoveToI - CurrentSlotI;
 		float DeltaX = IndexToMoveToJ - CurrentSlotJ;
 
-		UE_LOG(LogTemp, Error, TEXT("DeltaX: %s"), *FString::SanitizeFloat(DeltaX));
-		UE_LOG(LogTemp, Error, TEXT("DeltaY: %s"), *FString::SanitizeFloat(DeltaY));
-
-
 		if (DeltaY == AllowedMoves[i].Y && DeltaX == AllowedMoves[i].X)
 		{
 			AChessPiece* ChessPiece = Cast<AChessPiece>(GetActorFromSlot(IndexToMoveToI, IndexToMoveToJ));
+
+			if (isOnStartingSquare && FMath::Abs<float>(DeltaY) == 2)
+			{
+				for (int y = 1; y <= 2; y++)
+				{
+					
+					int SlotNI = CurrentSlotI + FMath::Sign<float>(AllowedMoves[i].Y)*y;
+					int SlotNJ = CurrentSlotJ;
+
+					AChessPiece* ChessPiece1 = Cast<AChessPiece>(GetActorFromSlot(SlotNI, SlotNJ));
+
+					if (ChessPiece1 != nullptr)
+					{
+						if (ChessPiece1->type == this->type)
+							return false;
+						if (ChessPiece1->type != this->type)
+							return false;
+					}
+				}
+			}
+			else if(FMath::Abs<float>(DeltaY) == 2)
+			{
+				return false;
+			}
 
 			if (!isPieceInSlot(IndexToMoveToI, IndexToMoveToJ) && IndexToMoveToI - CurrentSlotI != 0 && IndexToMoveToJ - CurrentSlotJ == 0)
 				MoveAllowed = true;

@@ -13,8 +13,12 @@ UCLASS()
 class CHESSGAME_API AChessRook : public AChessPiece
 {
 	GENERATED_BODY()
-	
-	
+public:
+	AChessRook();
+	virtual void BeginPlay() override;
+	virtual void GetPossibleMoveHighlight(TArray<int> &indexes) override;
+	virtual void TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction & ThisTickFunction) override;
+	virtual bool isValidMove(int IndexToMoveToI, int IndexToMoveToJ) override;
 	
 	
 };

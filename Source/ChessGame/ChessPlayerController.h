@@ -6,6 +6,7 @@
 #include "ChessPlayerController.generated.h"
 
 class AChessGameGameModeBase;
+class AChessPiece;
 
 UCLASS()
 class CHESSGAME_API AChessPlayerController : public APlayerController
@@ -24,6 +25,8 @@ public:
 	//int ToOneDimentional(int i, int j);
 
 	void MouseLeftClick();
+
+	void RemoveHighlighting(AChessPiece * LastChessPiece);
 
 	AChessGameGameModeBase* GameMode = nullptr;
 

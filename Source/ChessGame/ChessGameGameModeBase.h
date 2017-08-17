@@ -19,6 +19,13 @@ public:
 	AChessGameGameModeBase();
 	virtual void BeginPlay() override;
 
+	void SpawnPawnAtSlot(int i, int j, int type);
+	void SpawnRookAtSlot(int i, int j, int type);
+	void SpawnKnightAtSlot(int i, int j, int type);
+	void SpawnBishopAtSlot(int i, int j, int type);
+	void SpawnKingAtSlot(int i, int j, int type);
+	void SpawnQueenAtSlot(int i, int j, int type);
+
 	bool IsClickable(AActor* Actor);
 
 
@@ -33,6 +40,9 @@ public:
 
 	int CurrentPlayer = 0;
 	bool NextPlayer = false;
+
+	UPROPERTY(BlueprintReadWrite, Category="Run Camera Turn Animation?")
+	bool RunCameraAnimation = false;
 private:
 	FVector StartPosition = FVector(-18.f, 18.f, 1.f);
 	float Delta = 5.13f;
