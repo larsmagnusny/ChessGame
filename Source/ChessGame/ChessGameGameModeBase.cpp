@@ -12,6 +12,11 @@
 
 AChessGameGameModeBase::AChessGameGameModeBase()
 {
+	if (HasAuthority())
+	{
+		UE_LOG(LogTemp, Error, TEXT("I AM THE SERVER!"));
+	}
+
 	// Don't use default pawn
 	PrimaryActorTick.bCanEverTick = true;
 	DefaultPawnClass = nullptr;
@@ -35,6 +40,9 @@ AChessGameGameModeBase::AChessGameGameModeBase()
 void AChessGameGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
+
+	
+
 	// Spawn 8*2 pawns
 	int counter = 0;
 	for (int i = 0; i < 2; i++)

@@ -16,7 +16,8 @@ AChessPlayerController::AChessPlayerController()
 
 void AChessPlayerController::BeginPlay()
 {
-	InputComponent->BindAction("LeftMouseButton", IE_Released, this, &AChessPlayerController::MouseLeftClick);
+	if(GetNetMode() != ENetMode::NM_DedicatedServer)
+		InputComponent->BindAction("LeftMouseButton", IE_Released, this, &AChessPlayerController::MouseLeftClick);
 }
 
 void AChessPlayerController::TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction & ThisTickFunction)

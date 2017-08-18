@@ -1,17 +1,22 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
 #include "ChessPiece.h"
-#include "ChessGameGameModeBase.h"
 
 AChessPiece::AChessPiece()
 {
-	const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> WhiteMaterialLoader(TEXT("MaterialInstanceConstant'/Game/White_Inst.White_Inst'"));
-	const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> BlackMaterialLoader(TEXT("MaterialInstanceConstant'/Game/Black_Inst.Black_Inst'"));
-
-	if (WhiteMaterialLoader.Succeeded() && BlackMaterialLoader.Succeeded())
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		WhiteMaterial = WhiteMaterialLoader.Object;
-		BlackMaterial = BlackMaterialLoader.Object;
+		UE_LOG(LogTemp, Error, TEXT("I am the server, i do not need to load materials..."));
+	}
+	else
+	{
+		const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> WhiteMaterialLoader(TEXT("MaterialInstanceConstant'/Game/White_Inst.White_Inst'"));
+		const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> BlackMaterialLoader(TEXT("MaterialInstanceConstant'/Game/Black_Inst.Black_Inst'"));
+
+		if (WhiteMaterialLoader.Succeeded() && BlackMaterialLoader.Succeeded())
+		{
+			WhiteMaterial = WhiteMaterialLoader.Object;
+			BlackMaterial = BlackMaterialLoader.Object;
+		}
 	}
 }
 

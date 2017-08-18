@@ -37,11 +37,18 @@ UChessHighlightController::UChessHighlightController()
 		OnOffValues[i] = 0.f;
 
 	// Load Material Instance
-	const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> MaterialLoader(TEXT("MaterialInstanceConstant'/Game/ChessBoard_Inst.ChessBoard_Inst'"));
-
-	if (MaterialLoader.Succeeded())
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		MaterialConstantInstance = MaterialLoader.Object;
+		UE_LOG(LogTemp, Error, TEXT("I am a server, i do not need to load the material for the board..."));
+	}
+	else
+	{
+		const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> MaterialLoader(TEXT("MaterialInstanceConstant'/Game/ChessBoard_Inst.ChessBoard_Inst'"));
+
+		if (MaterialLoader.Succeeded())
+		{
+			MaterialConstantInstance = MaterialLoader.Object;
+		}
 	}
 }
 

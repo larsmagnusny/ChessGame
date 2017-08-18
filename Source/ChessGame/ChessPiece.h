@@ -7,6 +7,8 @@
 #include "ConstructorHelpers.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstanceConstant.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "ChessGameGameModeBase.h"
 #include "ChessPiece.generated.h"
 
 /**

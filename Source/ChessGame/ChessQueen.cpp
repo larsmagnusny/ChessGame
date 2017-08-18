@@ -10,15 +10,22 @@ AChessQueen::AChessQueen()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	bool AllSuccessfull = true;
-	const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Queen.Queen'"));
-
-	if (!MeshLoader.Succeeded())
-		AllSuccessfull = false;
-
-	if (AllSuccessfull)
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		Mesh = MeshLoader.Object;
+		UE_LOG(LogTemp, Error, TEXT("Don't need to load mesh if im a server!"));
+	}
+	else
+	{
+		bool AllSuccessfull = true;
+		const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Queen.Queen'"));
+
+		if (!MeshLoader.Succeeded())
+			AllSuccessfull = false;
+
+		if (AllSuccessfull)
+		{
+			Mesh = MeshLoader.Object;
+		}
 	}
 }
 
