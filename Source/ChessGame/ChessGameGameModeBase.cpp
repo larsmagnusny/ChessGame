@@ -12,11 +12,6 @@
 
 AChessGameGameModeBase::AChessGameGameModeBase()
 {
-	if (HasAuthority())
-	{
-		UE_LOG(LogTemp, Error, TEXT("I AM THE SERVER!"));
-	}
-
 	// Don't use default pawn
 	PrimaryActorTick.bCanEverTick = true;
 	DefaultPawnClass = nullptr;
