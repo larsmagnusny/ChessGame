@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ChessRook.h"
-#include "ChessGameGameModeBase.h"
+#include "ChessGameState.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/Actor.h"
@@ -10,63 +10,40 @@ AChessRook::AChessRook()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	if (GetNetMode() == ENetMode::NM_DedicatedServer)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Don't need to load mesh if im a server!"));
-	}
-	else
-	{
-		bool AllSuccessfull = true;
-		const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Rook.Rook'"));
+	bool AllSuccessfull = true;
+	const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Rook.Rook'"));
 
-		if (!MeshLoader.Succeeded())
-			AllSuccessfull = false;
+	if (!MeshLoader.Succeeded())
+		AllSuccessfull = false;
 
-		if (AllSuccessfull)
-		{
-			Mesh = MeshLoader.Object;
-		}
+	if (AllSuccessfull)
+	{
+		Mesh = MeshLoader.Object;
 	}
+
+	SetReplicates(true);
 }
 
 void AChessRook::BeginPlay()
 {
 	Super::BeginPlay();
 
+	InitializeAllowedMoves();
+	
+	InitMeshAndMaterial();
 
+	// Make Object Clickable
+	AChessGameState* GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
+
+	GameState->ClickableActors.Add(this);
+}
+
+void AChessRook::InitializeAllowedMoves()
+{
 	AllowedMoves.Add(FVector2D(0, 7));
 	AllowedMoves.Add(FVector2D(0, -7));
 	AllowedMoves.Add(FVector2D(7, 0));
 	AllowedMoves.Add(FVector2D(-7, 0));
-
-	UStaticMeshComponent* MeshComponent = GetStaticMeshComponent();
-	MeshComponent->SetStaticMesh(Mesh);
-
-	switch (type)
-	{
-	case 0:
-		MaterialToUse = UMaterialInstanceDynamic::Create(WhiteMaterial, this);
-		MaterialToUse->SetScalarParameterValue("Emissive", 0);
-		break;
-	case 1:
-		MaterialToUse = UMaterialInstanceDynamic::Create(BlackMaterial, this);
-		MaterialToUse->SetScalarParameterValue("Emissive", 0);
-		break;
-	default:
-		MaterialToUse = UMaterialInstanceDynamic::Create(WhiteMaterial, this);
-		UE_LOG(LogTemp, Warning, TEXT("Color on pawn not compatible!"));
-		break;
-	}
-
-
-	MeshComponent->SetMaterial(0, MaterialToUse);
-	// Make Object Movable
-	MeshComponent->SetMobility(EComponentMobility::Movable);
-
-	// Make Object Clickable
-	AChessGameGameModeBase* GameMode = Cast<AChessGameGameModeBase>(GetWorld()->GetAuthGameMode());
-
-	GameMode->ClickableActors.Add(this);
 }
 
 void AChessRook::GetPossibleMoveHighlight(TArray<int>& indexes)
@@ -134,6 +111,8 @@ void AChessRook::TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunct
 	Position = GetPositionFromSlot(CurrentSlotI, CurrentSlotJ);
 
 	SetActorLocation(Position);
+
+	UpdateHighlight();
 }
 
 bool AChessRook::isValidMove(int IndexToMoveToI, int IndexToMoveToJ)

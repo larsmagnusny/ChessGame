@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ChessBishop.h"
-#include "ChessGameGameModeBase.h"
+#include "ChessGameState.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/Actor.h"
@@ -20,44 +20,22 @@ AChessBishop::AChessBishop()
 	{
 		Mesh = MeshLoader.Object;
 	}
+
+	SetReplicates(true);
 }
 
 void AChessBishop::BeginPlay()
 {
 	Super::BeginPlay();
-	AllowedMoves.Add(FVector2D(7, 7));
-	AllowedMoves.Add(FVector2D(-7, 7));
-	AllowedMoves.Add(FVector2D(7, -7));
-	AllowedMoves.Add(FVector2D(-7, -7));
 
-	UStaticMeshComponent* MeshComponent = GetStaticMeshComponent();
-	MeshComponent->SetStaticMesh(Mesh);
+	InitializeAllowedMoves();
 
-	switch (type)
-	{
-	case 0:
-		MaterialToUse = UMaterialInstanceDynamic::Create(WhiteMaterial, this);
-		MaterialToUse->SetScalarParameterValue("Emissive", 0);
-		break;
-	case 1:
-		MaterialToUse = UMaterialInstanceDynamic::Create(BlackMaterial, this);
-		MaterialToUse->SetScalarParameterValue("Emissive", 0);
-		break;
-	default:
-		MaterialToUse = UMaterialInstanceDynamic::Create(WhiteMaterial, this);
-		UE_LOG(LogTemp, Warning, TEXT("Color on pawn not compatible!"));
-		break;
-	}
-
-
-	MeshComponent->SetMaterial(0, MaterialToUse);
-	// Make Object Movable
-	MeshComponent->SetMobility(EComponentMobility::Movable);
+	InitMeshAndMaterial();
 
 	// Make Object Clickable
-	AChessGameGameModeBase* GameMode = Cast<AChessGameGameModeBase>(GetWorld()->GetAuthGameMode());
+	AChessGameState* GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
 
-	GameMode->ClickableActors.Add(this);
+	GameState->ClickableActors.Add(this);
 }
 
 void AChessBishop::GetPossibleMoveHighlight(TArray<int>& indexes)
@@ -104,6 +82,8 @@ void AChessBishop::TickActor(float DeltaTime, ELevelTick TickType, FActorTickFun
 	Position = GetPositionFromSlot(CurrentSlotI, CurrentSlotJ);
 
 	SetActorLocation(Position);
+
+	UpdateHighlight();
 }
 
 bool AChessBishop::isValidMove(int IndexToMoveToI, int IndexToMoveToJ)

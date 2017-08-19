@@ -1,10 +1,14 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
 #include "ChessPlayerController.h"
-#include "ChessGameGameModeBase.h"
-#include "ChessHighlightController.h"
+#include "ChessGameState.h"
+#include "ChessBoardActor.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
 #include "ChessPiece.h"
-
+#include "Engine/World.h"
+#include "Camera/CameraActor.h"
+#include "GameFramework/Pawn.h"
+//#include "ChessPlayerController.h"
 
 AChessPlayerController::AChessPlayerController()
 {
@@ -12,28 +16,86 @@ AChessPlayerController::AChessPlayerController()
 	bEnableClickEvents = true;
 	bEnableMouseOverEvents = true;
 	PrimaryActorTick.bCanEverTick = true;
+	bAutoManageActiveCameraTarget = false;
 }
 
 void AChessPlayerController::BeginPlay()
 {
-	if(GetNetMode() != ENetMode::NM_DedicatedServer)
+	Super::BeginPlay();
+
+	if (!GameState)
+		GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
+
+	if (GameState->CurrentPlayers == 0)
+	{
+		PlayerType = 0;
+		GameState->CurrentPlayers++;
+	}
+	else
+	{
+		PlayerType = 1;
+		GameState->CurrentPlayers++;
+	}
+
+	if (GetNetMode() != ENetMode::NM_DedicatedServer)
+	{
 		InputComponent->BindAction("LeftMouseButton", IE_Released, this, &AChessPlayerController::MouseLeftClick);
+	}
+
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
+	{
+		GameState->SpawnPieces();
+	}
 }
 
 void AChessPlayerController::TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction & ThisTickFunction)
 {
 	Super::TickActor(DeltaTime, TickType, ThisTickFunction);
 
-	if(!GameMode)
-		GameMode = Cast<AChessGameGameModeBase>(GetWorld()->GetAuthGameMode());
-
 	FHitResult Hit;
 
 	GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(ECollisionChannel::ECC_Visibility), true, Hit);
 
-
 	UpdateHighlight(Hit);
-	UpdateBoardHighlight(Hit);
+	//UpdateBoardHighlight(Hit);
+
+	if (GetNetMode() == ENetMode::NM_Client)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Camera set on client: %s"), *PlayerCameraManager->GetViewTarget()->GetName());
+	}
+
+	if (!CameraViewSet || (GetViewTarget() != Camera && Camera != nullptr))
+	{
+		if (GetNetMode() == ENetMode::NM_Client)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Camera set on client: %s"), *PlayerCameraManager->GetViewTarget()->GetName());
+		}
+		if (GetNetMode() == ENetMode::NM_DedicatedServer)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Camera set on Dedicated Server"), *PlayerCameraManager->GetViewTarget()->GetName());
+		}
+		if (GetNetMode() == ENetMode::NM_Standalone)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Camera set on StandAlone"), *PlayerCameraManager->GetViewTarget()->GetName());
+		}
+		
+		FVector Location = FVector(0, 17.f, 36.f);
+		FRotator Rotation = FRotator(-70.f, -90.f, 0.f);
+
+		if (PlayerType == 1)
+		{
+			Location = FVector(0.f, -17.f, 36.f);
+			Rotation = FRotator(-70.f, 90.f, 0.f);
+		}
+
+		FActorSpawnParameters SpawnInfo;
+
+		Camera = GetWorld()->SpawnActor<ACameraActor>(Location, Rotation, SpawnInfo);
+
+		SetViewTarget(Camera);
+
+		CameraViewSet = true;
+	}
 }
 
 void AChessPlayerController::BeginPlayingState()
@@ -42,25 +104,38 @@ void AChessPlayerController::BeginPlayingState()
 
 void AChessPlayerController::UpdateHighlight(FHitResult &Hit)
 {
-	
-	if (Hit.Actor != nullptr)
+	if (GetNetMode() != ENetMode::NM_DedicatedServer)
 	{
-		if (GameMode->IsClickable(Hit.Actor.Get()))
+		if (Hit.Actor != nullptr)
 		{
-			AChessPiece* ChessPiece = Cast<AChessPiece>(Hit.Actor.Get());
-			// Make the actor shine!
-
-			if (Hit.Actor.Get() != LastHighlightedActor && LastHighlightedActor != nullptr)
+			if (GameState->IsClickable(Hit.Actor.Get()))
 			{
-				AChessPiece* LastChessPiece = Cast<AChessPiece>(LastHighlightedActor);
+				AChessPiece* ChessPiece = Cast<AChessPiece>(Hit.Actor.Get());
+				// Make the actor shine!
 
-				LastChessPiece->RemoveHighlight();
-				LastHighlightedActor = nullptr;
+				if (Hit.Actor.Get() != LastHighlightedActor && LastHighlightedActor != nullptr)
+				{
+					AChessPiece* LastChessPiece = Cast<AChessPiece>(LastHighlightedActor);
+
+					LastChessPiece->MultiplayerSafeRemoveHighlight();
+					LastHighlightedActor = nullptr;
+				}
+				else if (PlayerType == ChessPiece->type)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("ToggleHighlight Called"));
+					ChessPiece->MultiplayerSafeToggleHighlight();
+					LastHighlightedActor = Hit.Actor.Get();
+				}
 			}
-			else if(GameMode->CurrentPlayer == ChessPiece->type)
+			else
 			{
-				ChessPiece->ToggleHighlight();
-				LastHighlightedActor = Hit.Actor.Get();
+				if (LastHighlightedActor)
+				{
+					AChessPiece* ChessPiece = Cast<AChessPiece>(LastHighlightedActor);
+
+					ChessPiece->MultiplayerSafeRemoveHighlight();
+					LastHighlightedActor = nullptr;
+				}
 			}
 		}
 		else
@@ -69,19 +144,9 @@ void AChessPlayerController::UpdateHighlight(FHitResult &Hit)
 			{
 				AChessPiece* ChessPiece = Cast<AChessPiece>(LastHighlightedActor);
 
-				ChessPiece->RemoveHighlight();
+				ChessPiece->MultiplayerSafeRemoveHighlight();
 				LastHighlightedActor = nullptr;
 			}
-		}
-	}
-	else
-	{
-		if (LastHighlightedActor)
-		{
-			AChessPiece* ChessPiece = Cast<AChessPiece>(LastHighlightedActor);
-
-			ChessPiece->RemoveHighlight();
-			LastHighlightedActor = nullptr;
 		}
 	}
 }
@@ -94,7 +159,7 @@ void AChessPlayerController::UpdateBoardHighlight(FHitResult & Hit)
 
 		if (!ChessPiece->MovesAreHighlighted)
 		{
-			UChessHighlightController* HighlightController = Cast<UChessHighlightController>(GameMode->HighlightController);
+			AChessBoardActor* HighlightController = Cast<AChessBoardActor>(GameState->HighlightController);
 
 			TArray<int> IndexesToHighlight;
 			ChessPiece->GetPossibleMoveHighlight(IndexesToHighlight);
@@ -120,9 +185,9 @@ int AChessPlayerController::GetSlotIndexFromWorld(FVector HitPoint, int& I, int 
 		for (int j = 0; j < 8; j++)
 		{
 			// Care only about X / Y coordinates...
-			if (HitPoint.X >= GameMode->BoardInstance.Slots[i][j].Position.X - GameMode->BoardInstance.Slots[i][j].Left && HitPoint.X <= GameMode->BoardInstance.Slots[i][j].Position.X + GameMode->BoardInstance.Slots[i][j].Right)
+			if (HitPoint.X >= GameState->BoardInstance.Slots[i][j].Position.X - GameState->BoardInstance.Slots[i][j].Left && HitPoint.X <= GameState->BoardInstance.Slots[i][j].Position.X + GameState->BoardInstance.Slots[i][j].Right)
 			{
-				if (HitPoint.Y >= GameMode->BoardInstance.Slots[i][j].Position.Y - GameMode->BoardInstance.Slots[i][j].Top && HitPoint.Y <= GameMode->BoardInstance.Slots[i][j].Position.Y + GameMode->BoardInstance.Slots[i][j].Bottom)
+				if (HitPoint.Y >= GameState->BoardInstance.Slots[i][j].Position.Y - GameState->BoardInstance.Slots[i][j].Top && HitPoint.Y <= GameState->BoardInstance.Slots[i][j].Position.Y + GameState->BoardInstance.Slots[i][j].Bottom)
 				{
 					I = i;
 					J = j;
@@ -155,7 +220,7 @@ void AChessPlayerController::MouseLeftClick()
 		if (LastSelectedActor != nullptr)
 			LastChessPiece = Cast<AChessPiece>(LastSelectedActor);
 
-		if (GameMode->IsClickable(Hit.Actor.Get()))
+		if (GameState->IsClickable(Hit.Actor.Get()))
 		{
 			if (LastSelectedActor != Hit.Actor.Get() && LastSelectedActor != nullptr)
 			{
@@ -170,23 +235,22 @@ void AChessPlayerController::MouseLeftClick()
 					{
 						int SlotToMoveToI = ChessPiece->CurrentSlotI;
 						int SlotToMoveToJ = ChessPiece->CurrentSlotJ;
-						if (GameMode->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant != nullptr)
+						if (GameState->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant != nullptr)
 						{
-							GameMode->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant->Destroy();
-							GameMode->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant = nullptr;
+							GameState->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant->Destroy();
+							GameState->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant = nullptr;
 						}
 
-						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
+						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
 						LastChessPiece->CurrentSlotI = SlotToMoveToI;
 						LastChessPiece->CurrentSlotJ = SlotToMoveToJ;
 						LastChessPiece->isOnStartingSquare = false;
-						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
+						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
 
 						// Remove Selection and Board Highlighting
 						RemoveHighlighting(LastChessPiece);
 
-						GameMode->CurrentPlayer = !GameMode->CurrentPlayer;
-						GameMode->RunCameraAnimation = true;
+						GameState->RunCameraAnimation = true;
 						return;
 					}
 					else
@@ -203,10 +267,10 @@ void AChessPlayerController::MouseLeftClick()
 				// Remove Selection and Board Highlighting
 				RemoveHighlighting(ChessPiece);
 			}
-			else if(GameMode->CurrentPlayer == ChessPiece->type)
+			else if(PlayerType == ChessPiece->type)
 			{
 				ChessPiece->ToggleSelected();
-				GameMode->CurrentlySelectedActor = ChessPiece;
+				GameState->CurrentlySelectedActor = ChessPiece;
 				LastSelectedActor = ChessPiece;
 			}
 		}
@@ -226,20 +290,19 @@ void AChessPlayerController::MouseLeftClick()
 					if (LastChessPiece->isValidMove(SlotPointedAtI, SlotPointedAtJ))
 					{
 						// Check if there is a chesspiece in the spot you want to move, so you can take it.
-						if (GameMode->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant != nullptr)
+						if (GameState->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant != nullptr)
 						{
-							GameMode->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant->Destroy();
-							GameMode->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant = nullptr;
+							GameState->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant->Destroy();
+							GameState->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant = nullptr;
 						}
 
-						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
+						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
 						LastChessPiece->CurrentSlotI = SlotPointedAtI;
 						LastChessPiece->CurrentSlotJ = SlotPointedAtJ;
 						LastChessPiece->isOnStartingSquare = false;
-						GameMode->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
+						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
 
-						GameMode->CurrentPlayer = !GameMode->CurrentPlayer;
-						GameMode->RunCameraAnimation = true;
+						GameState->RunCameraAnimation = true;
 					}
 				}
 
@@ -262,9 +325,9 @@ void AChessPlayerController::MouseLeftClick()
 
 void AChessPlayerController::RemoveHighlighting(AChessPiece * LastChessPiece)
 {
-	LastChessPiece->RemoveSelected();
+	LastChessPiece->MultiplayerSafeRemoveSelected();
 	LastSelectedActor = nullptr;
-	GameMode->CurrentlySelectedActor = nullptr;
-	Cast<UChessHighlightController>(GameMode->HighlightController)->SetAllOff();
+	GameState->CurrentlySelectedActor = nullptr;
+	Cast<AChessBoardActor>(GameState->HighlightController)->SetAllOff();
 	Cast<AChessPiece>(LastMovesHighlightedActor)->MovesAreHighlighted = false;
 }

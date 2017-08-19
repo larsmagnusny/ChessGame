@@ -2,11 +2,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/PlayerController.h"
+#include "Net/UnrealNetwork.h"
 #include "ChessPlayerController.generated.h"
 
-class AChessGameGameModeBase;
+class AChessGameState;
 class AChessPiece;
+class APlayerController;
+class ACameraActor;
 
 UCLASS()
 class CHESSGAME_API AChessPlayerController : public APlayerController
@@ -28,7 +30,7 @@ public:
 
 	void RemoveHighlighting(AChessPiece * LastChessPiece);
 
-	AChessGameGameModeBase* GameMode = nullptr;
+	AChessGameState* GameState = nullptr;
 
 	AActor* LastHighlightedActor = nullptr;
 	AActor* LastSelectedActor = nullptr;
@@ -37,4 +39,10 @@ public:
 	int SlotPointedAtI = 0;
 	int SlotPointedAtJ = 0;
 	bool HoveringOverSlot = false;
+
+	bool CameraViewSet = false;
+
+	ACameraActor* Camera = nullptr;
+
+	int PlayerType = 0;
 };

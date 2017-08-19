@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ChessKnight.h"
-#include "ChessGameGameModeBase.h"
+#include "ChessGameState.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/Actor.h"
@@ -10,29 +10,37 @@ AChessKnight::AChessKnight()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	if (GetNetMode() == ENetMode::NM_DedicatedServer)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Don't need to load mesh if im a server!"));
-	}
-	else
-	{
-		bool AllSuccessfull = true;
-		const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Knight.Knight'"));
+	bool AllSuccessfull = true;
+	const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Knight.Knight'"));
 
-		if (!MeshLoader.Succeeded())
-			AllSuccessfull = false;
+	if (!MeshLoader.Succeeded())
+		AllSuccessfull = false;
 
-		if (AllSuccessfull)
-		{
-			Mesh = MeshLoader.Object;
-		}
+	if (AllSuccessfull)
+	{
+		Mesh = MeshLoader.Object;
 	}
+
+	SetReplicates(true);
+
 }
 
 void AChessKnight::BeginPlay()
 {
 	Super::BeginPlay();
 
+	InitializeAllowedMoves();
+
+	InitMeshAndMaterial();
+
+	// Make Object Clickable
+	AChessGameState* GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
+
+	GameState->ClickableActors.Add(this);
+}
+
+void AChessKnight::InitializeAllowedMoves()
+{
 	AllowedMoves.Add(FVector2D(2, 1));
 	AllowedMoves.Add(FVector2D(2, -1));
 
@@ -44,35 +52,6 @@ void AChessKnight::BeginPlay()
 
 	AllowedMoves.Add(FVector2D(1, -2));
 	AllowedMoves.Add(FVector2D(-1, -2));
-
-	UStaticMeshComponent* MeshComponent = GetStaticMeshComponent();
-	MeshComponent->SetStaticMesh(Mesh);
-
-	switch (type)
-	{
-	case 0:
-		MaterialToUse = UMaterialInstanceDynamic::Create(WhiteMaterial, this);
-		MaterialToUse->SetScalarParameterValue("Emissive", 0);
-		break;
-	case 1:
-		MaterialToUse = UMaterialInstanceDynamic::Create(BlackMaterial, this);
-		MaterialToUse->SetScalarParameterValue("Emissive", 0);
-		break;
-	default:
-		MaterialToUse = UMaterialInstanceDynamic::Create(WhiteMaterial, this);
-		UE_LOG(LogTemp, Warning, TEXT("Color on pawn not compatible!"));
-		break;
-	}
-
-
-	MeshComponent->SetMaterial(0, MaterialToUse);
-	// Make Object Movable
-	MeshComponent->SetMobility(EComponentMobility::Movable);
-
-	// Make Object Clickable
-	AChessGameGameModeBase* GameMode = Cast<AChessGameGameModeBase>(GetWorld()->GetAuthGameMode());
-
-	GameMode->ClickableActors.Add(this);
 }
 
 void AChessKnight::GetPossibleMoveHighlight(TArray<int>& indexes)
@@ -108,6 +87,8 @@ void AChessKnight::TickActor(float DeltaTime, ELevelTick TickType, FActorTickFun
 	Position = GetPositionFromSlot(CurrentSlotI, CurrentSlotJ);
 
 	SetActorLocation(Position);
+
+	UpdateHighlight();
 }
 
 bool AChessKnight::isValidMove(int IndexToMoveToI, int IndexToMoveToJ)

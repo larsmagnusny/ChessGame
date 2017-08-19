@@ -16,6 +16,7 @@ class CHESSGAME_API AChessPawn : public AChessPiece
 public:
 	AChessPawn();
 	virtual void BeginPlay() override;
+	virtual void InitializeAllowedMoves() override;
 	virtual void GetPossibleMoveHighlight(TArray<int> &indexes) override;
 	virtual void TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction & ThisTickFunction) override;
 	virtual bool isValidMove(int IndexToMoveToI, int IndexToMoveToJ) override;
