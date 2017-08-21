@@ -14,7 +14,7 @@
 
 AChessBoardActor::AChessBoardActor()
 {
-	bReplicates = true;
+	//bReplicates = true;
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryActorTick.bCanEverTick = true;
@@ -145,10 +145,3 @@ void AChessBoardActor::ClearAllColor()
 		ColorValues[i] = FLinearColor(0.f, 0.f, 0.f);
 	}
 }
-
-void AChessBoardActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-	DOREPLIFETIME(AChessBoardActor, ColorValues);
-	DOREPLIFETIME(AChessBoardActor, OnOffValues);
-}
-

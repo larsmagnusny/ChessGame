@@ -7,12 +7,14 @@
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "ChessGameState.h"
+#include "ChessPlayerController.h"
 
 AChessPiece::AChessPiece()
 {
 	if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ChessPiece Constructor ran on Server"));
+		
 	}
 
 	if (GetNetMode() == ENetMode::NM_Client)
@@ -30,8 +32,21 @@ AChessPiece::AChessPiece()
 	}
 
 	//SetRemoteRoleForBackwardsCompat(ROLE_SimulatedProxy);
-	//bReplicates = true;
-	//bAlwaysRelevant = true;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+	PrimaryActorTick.bAllowTickOnDedicatedServer = true;
+	bOnlyRelevantToOwner = false;
+	bReplicates = true;
+}
+
+void AChessPiece::StaticLoadMaterials()
+{
+
+}
+
+void AChessPiece::StaticLoadMesh()
+{
+
 }
 
 
@@ -89,12 +104,11 @@ void AChessPiece::MultiplayerSafeToggleHighlight()
 	}
 	else if (GetNetMode() == ENetMode::NM_Standalone)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Trying to set highlighted"));
 		IsHighlighted = true;
 	}
 	else if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle highlighting as a Dedicated Server."));
+		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle as a Dedicated Server."));
 	}
 }
 
@@ -111,7 +125,7 @@ void AChessPiece::MultiplayerSafeRemoveHighlight()
 	}
 	else if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle highlighting as a Dedicated Server."));
+		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle as a Dedicated Server."));
 	}
 }
 
@@ -127,7 +141,7 @@ void AChessPiece::MultiplayerSafeToggleSelected()
 	}
 	else if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle selection as a Dedicated Server."));
+		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle as a Dedicated Server."));
 	}
 }
 
@@ -143,47 +157,100 @@ void AChessPiece::MultiplayerSafeRemoveSelected()
 	}
 	else if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle selection as a Dedicated Server."));
+		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle as a Dedicated Server."));
 	}
 }
 
-void AChessPiece::ToggleHighlight()
+void AChessPiece::MultiplayerSafeMoveSelected(int ToI, int ToJ)
+{
+	if (GetNetMode() == ENetMode::NM_Client)
+	{
+		MoveSelected(ToI, ToJ);
+	}
+	else if (GetNetMode() == ENetMode::NM_Standalone)
+	{
+		CurrentSlotI = ToI;
+		CurrentSlotJ = ToJ;
+	}
+	else if (GetNetMode() == ENetMode::NM_DedicatedServer)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Should not be able to toggle as a Dedicated Server."));
+	}
+}
+
+void AChessPiece::ToggleHighlight_Implementation()
 {
 	IsHighlighted = true;
+	UE_LOG(LogTemp, Warning, TEXT("Highlight has been sendt to server"));
 }
 
-void AChessPiece::RemoveHighlight()
+bool AChessPiece::ToggleHighlight_Validate()
+{
+	return true;
+}
+
+void AChessPiece::RemoveHighlight_Implementation()
 {
 	IsHighlighted = false;
+	UE_LOG(LogTemp, Warning, TEXT("Highlight has been sendt to server"));
 }
 
-void AChessPiece::ToggleSelected()
+bool AChessPiece::RemoveHighlight_Validate()
 {
-	if (!MaterialToUse)
-		return;
+	return true;
+}
 
+void AChessPiece::ToggleSelected_Implementation()
+{
 	Selected = true;
 }
 
-void AChessPiece::RemoveSelected()
+bool AChessPiece::ToggleSelected_Validate()
+{
+	return true;
+}
+
+void AChessPiece::RemoveSelected_Implementation()
 {
 	Selected = false;
 }
 
+bool AChessPiece::RemoveSelected_Validate()
+{
+	return true;
+}
+
+void AChessPiece::MoveSelected_Implementation(int ToI, int ToJ)
+{
+	// Runs on Server
+	CurrentSlotI = ToI;
+	CurrentSlotJ = ToJ;
+}
+
+bool AChessPiece::MoveSelected_Validate(int ToI, int ToJ)
+{
+	return true;
+}
+
 void AChessPiece::UpdateHighlight()
 {
-	if (GetNetMode() != ENetMode::NM_DedicatedServer)
-	{
-		if (IsHighlighted)
-			MaterialToUse->SetScalarParameterValue("Emissive", 1.f);
-		else
-			MaterialToUse->SetScalarParameterValue("Emissive", 0.f);
+	float CurrentValue;
+		
+	MaterialToUse->GetScalarParameterValue("Emissive", CurrentValue);
 
-		if (Selected)
-			MaterialToUse->SetScalarParameterValue("Emissive", 1.f);
-		else
-			MaterialToUse->SetScalarParameterValue("Emissive", 0.f);
+	if (IsHighlighted && LastIsHighlighted != IsHighlighted || (Selected && LastIsSelected != Selected))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has been highlighted"), *GetName());
+		MaterialToUse->SetScalarParameterValue("Emissive", 1.f);
 	}
+	else if (!IsHighlighted && LastIsHighlighted != IsHighlighted || (!Selected && LastIsSelected != Selected))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has had highlighting removed"), *GetName());
+		MaterialToUse->SetScalarParameterValue("Emissive", 0.f);
+		
+	}
+	LastIsHighlighted = IsHighlighted;
+	LastIsSelected = Selected;
 }
 
 void AChessPiece::GetPossibleMoveHighlight(TArray<int>& indexes)
@@ -215,7 +282,7 @@ FVector AChessPiece::GetPositionFromSlot(int i, int j)
 		return FVector(0, 0, 0);
 	AChessGameState* GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
 
-	return GameState->BoardInstance.Slots[i][j].Position;
+	return GameState->Slots[i].Position[j];
 }
 
 AActor * AChessPiece::GetActorFromSlot(int i, int j)
@@ -223,9 +290,9 @@ AActor * AChessPiece::GetActorFromSlot(int i, int j)
 	if (i >= 8 || i < 0 || j >= 8 || j < 0)
 		return nullptr;
 
-	AChessGameState* GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
+	AChessPlayerController* PlayerController = Cast<AChessPlayerController>(GetWorld()->GetFirstPlayerController());
 
-	return GameState->BoardInstance.Slots[i][j].Occupant;
+	return PlayerController->OCData[i].Occupant[j];
 }
 
 bool AChessPiece::isPieceInSlot(int i, int j)
@@ -233,27 +300,40 @@ bool AChessPiece::isPieceInSlot(int i, int j)
 	if (i >= 8 || i < 0 || j >= 8 || j < 0)
 		return true;
 
-	AChessGameState* GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
+	AChessPlayerController* PlayerController = Cast<AChessPlayerController>(GetWorld()->GetFirstPlayerController());
 
-	if (GameState->BoardInstance.Slots[i][j].Occupant == nullptr)
+	if (PlayerController->OCData[i].Occupant[j] == nullptr)
 	{
 		return false;
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Piece in next spot: %s"), *GameState->BoardInstance.Slots[i][j].Occupant->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("Piece in next spot: %s"), *PlayerController->OCData[i].Occupant[j]->GetName());
 		return true;
 	}
 }
 
 void AChessPiece::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-	DOREPLIFETIME(AChessPiece, IsHighlighted);
-	DOREPLIFETIME(AChessPiece, Selected);
-	DOREPLIFETIME(AChessPiece, isOnStartingSquare);
-	DOREPLIFETIME(AChessPiece, type);
-	DOREPLIFETIME(AChessPiece, AllowedMoves);
-	DOREPLIFETIME(AChessPiece, Position);
-	DOREPLIFETIME(AChessPiece, CurrentSlotI);
-	DOREPLIFETIME(AChessPiece, CurrentSlotJ);
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AChessPiece, IsHighlighted, COND_None);
+	DOREPLIFETIME_CONDITION(AChessPiece, Selected, COND_None);
+	DOREPLIFETIME_CONDITION(AChessPiece, CurrentSlotI, COND_None);
+	DOREPLIFETIME_CONDITION(AChessPiece, CurrentSlotJ, COND_None);
+	DOREPLIFETIME_CONDITION(AChessPiece, type, COND_None);
+}
+
+void AChessPiece::ClientInit_Implementation()
+{
+	if (GetNetMode() == ENetMode::NM_Client)
+	{
+		//InitMeshAndMaterial();
+		//AChessGameState* GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
+
+		//GameState->InitCallback(this);
+
+		UE_LOG(LogTemp, Warning, TEXT("Ran ClientInit on Client"));
+	}
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
+		UE_LOG(LogTemp, Warning, TEXT("Ran ClientInit on Server"));
 }

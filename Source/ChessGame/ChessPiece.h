@@ -28,17 +28,32 @@ public:
 	void MultiplayerSafeToggleSelected();
 	void MultiplayerSafeRemoveSelected();
 
-	//UFUNCTION(Server, Reliable, WithValidation)
-	virtual void ToggleHighlight();
+	void MultiplayerSafeMoveSelected(int ToI, int ToJ);
 
-	//UFUNCTION(Server, Reliable, WithValidation)
-	virtual void RemoveHighlight();
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ToggleHighlight();
+	virtual void ToggleHighlight_Implementation();
+	virtual bool ToggleHighlight_Validate();
 
-	//UFUNCTION(Server, Reliable, WithValidation)
-	virtual void ToggleSelected();
+	UFUNCTION(Server, Reliable, WithValidation)
+	void RemoveHighlight();
+	virtual void RemoveHighlight_Implementation();
+	virtual bool RemoveHighlight_Validate();
 
-	//UFUNCTION(Server, Reliable, WithValidation)
-	virtual void RemoveSelected();
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ToggleSelected();
+	virtual void ToggleSelected_Implementation();
+	virtual bool ToggleSelected_Validate();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void RemoveSelected();
+	virtual void RemoveSelected_Implementation();
+	virtual bool RemoveSelected_Validate();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void MoveSelected(int ToI, int ToJ);
+	virtual void MoveSelected_Implementation(int ToI, int ToJ);
+	virtual bool MoveSelected_Validate(int ToI, int ToJ);
 
 	void UpdateHighlight();
 
@@ -56,18 +71,24 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 
-	//UPROPERTY(Replicated)
-	bool IsHighlighted = false;
+	virtual void StaticLoadMaterials();
 
-	//UPROPERTY(Replicated)
+	virtual void StaticLoadMesh();
+
+	UPROPERTY(Replicated)
+	bool IsHighlighted = false;
+	UPROPERTY(Replicated)
 	bool Selected = false;
+
+	bool LastIsHighlighted = false;
+	bool LastIsSelected = false;
 
 	bool MovesAreHighlighted = false;
 
 	//UPROPERTY(Replicated)
 	bool isOnStartingSquare = true;
 
-	//UPROPERTY(Replicated)
+	UPROPERTY(Replicated)
 	int type = 0;
 
 	UStaticMesh* Mesh = nullptr;
@@ -84,13 +105,17 @@ public:
 	//UPROPERTY(Replicated)
 	FVector Position;
 
-	//UPROPERTY(Replicated)
+	UPROPERTY(Replicated)
 	int CurrentSlotI = 0;
 
-	//UPROPERTY(Replicated)
+	UPROPERTY(Replicated)
 	int CurrentSlotJ = 0;
 
-
 	bool MeshAndMaterialInitialized = false;
-	
+
+	bool MessageSendtToClients = false;
+
+	UFUNCTION(NetMulticast, Reliable)
+	void ClientInit();
+	virtual void ClientInit_Implementation();
 };

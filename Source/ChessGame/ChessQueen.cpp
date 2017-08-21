@@ -21,8 +21,6 @@ AChessQueen::AChessQueen()
 	{
 		Mesh = MeshLoader.Object;
 	}
-
-	SetReplicates(true);
 }
 
 void AChessQueen::BeginPlay()

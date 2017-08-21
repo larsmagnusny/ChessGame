@@ -8,6 +8,12 @@
 #include "Engine/World.h"
 #include "Camera/CameraActor.h"
 #include "GameFramework/Pawn.h"
+#include "ChessPawn.h"
+#include "ChessRook.h"
+#include "ChessKnight.h"
+#include "ChessBishop.h"
+#include "ChessKing.h"
+#include "ChessQueen.h"
 //#include "ChessPlayerController.h"
 
 AChessPlayerController::AChessPlayerController()
@@ -26,15 +32,23 @@ void AChessPlayerController::BeginPlay()
 	if (!GameState)
 		GameState = Cast<AChessGameState>(GetWorld()->GetGameState());
 
-	if (GameState->CurrentPlayers == 0)
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		PlayerType = 0;
-		GameState->CurrentPlayers++;
-	}
-	else
-	{
-		PlayerType = 1;
-		GameState->CurrentPlayers++;
+		if (GameState->CurrentPlayers == 0)
+		{
+			PlayerType = 0;
+			
+			UE_LOG(LogTemp, Warning, TEXT("First Player Joined"));
+
+			GameState->CurrentPlayers++;
+		}
+		else
+		{
+			PlayerType = 1;
+			UE_LOG(LogTemp, Warning, TEXT("Second Player Joined"));
+
+			GameState->CurrentPlayers++;
+		}
 	}
 
 	if (GetNetMode() != ENetMode::NM_DedicatedServer)
@@ -44,25 +58,38 @@ void AChessPlayerController::BeginPlay()
 
 	if (GetNetMode() == ENetMode::NM_DedicatedServer)
 	{
-		GameState->SpawnPieces();
+		SpawnPieces(this, PlayerType);
+	}
+	else
+	{
+		FTransform SpawnTransform(FRotator(0, 0, 0), FVector(0, 0, 0));
+
+		AChessBoardActor* DeferredChessBoard = Cast<AChessBoardActor>(UGameplayStatics::BeginDeferredActorSpawnFromClass(this, AChessBoardActor::StaticClass(), SpawnTransform));
+
+		if (DeferredChessBoard != nullptr)
+		{
+			DeferredChessBoard->SetOwner(this);
+			DeferredChessBoard->FinishSpawning(SpawnTransform);
+			DeferredChessBoard->SetReplicates(false);
+		}
+
+		
 	}
 }
 
 void AChessPlayerController::TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction & ThisTickFunction)
 {
 	Super::TickActor(DeltaTime, TickType, ThisTickFunction);
+	
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
+		return;
 
 	FHitResult Hit;
 
 	GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(ECollisionChannel::ECC_Visibility), true, Hit);
 
 	UpdateHighlight(Hit);
-	//UpdateBoardHighlight(Hit);
-
-	if (GetNetMode() == ENetMode::NM_Client)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Camera set on client: %s"), *PlayerCameraManager->GetViewTarget()->GetName());
-	}
+	UpdateBoardHighlight(Hit);
 
 	if (!CameraViewSet || (GetViewTarget() != Camera && Camera != nullptr))
 	{
@@ -95,6 +122,8 @@ void AChessPlayerController::TickActor(float DeltaTime, ELevelTick TickType, FAc
 		SetViewTarget(Camera);
 
 		CameraViewSet = true;
+
+		UpdateSlots();
 	}
 }
 
@@ -104,6 +133,7 @@ void AChessPlayerController::BeginPlayingState()
 
 void AChessPlayerController::UpdateHighlight(FHitResult &Hit)
 {
+	UE_LOG(LogTemp, Warning, TEXT("PlayerType: %s"), *FString::FromInt(PlayerType));
 	if (GetNetMode() != ENetMode::NM_DedicatedServer)
 	{
 		if (Hit.Actor != nullptr)
@@ -120,12 +150,14 @@ void AChessPlayerController::UpdateHighlight(FHitResult &Hit)
 					LastChessPiece->MultiplayerSafeRemoveHighlight();
 					LastHighlightedActor = nullptr;
 				}
-				else if (PlayerType == ChessPiece->type)
+				else if (PlayerType == ChessPiece->type && LastHighlightedActor == nullptr)
 				{
 					UE_LOG(LogTemp, Warning, TEXT("ToggleHighlight Called"));
 					ChessPiece->MultiplayerSafeToggleHighlight();
 					LastHighlightedActor = Hit.Actor.Get();
 				}
+
+				UE_LOG(LogTemp, Warning, TEXT("ChessPieceType: %s"), *FString::FromInt(ChessPiece->type));
 			}
 			else
 			{
@@ -185,9 +217,9 @@ int AChessPlayerController::GetSlotIndexFromWorld(FVector HitPoint, int& I, int 
 		for (int j = 0; j < 8; j++)
 		{
 			// Care only about X / Y coordinates...
-			if (HitPoint.X >= GameState->BoardInstance.Slots[i][j].Position.X - GameState->BoardInstance.Slots[i][j].Left && HitPoint.X <= GameState->BoardInstance.Slots[i][j].Position.X + GameState->BoardInstance.Slots[i][j].Right)
+			if (HitPoint.X >= GameState->Slots[i].Position[j].X - GameState->Slots[i].Left[j] && HitPoint.X <= GameState->Slots[i].Position[j].X + GameState->Slots[i].Right[j])
 			{
-				if (HitPoint.Y >= GameState->BoardInstance.Slots[i][j].Position.Y - GameState->BoardInstance.Slots[i][j].Top && HitPoint.Y <= GameState->BoardInstance.Slots[i][j].Position.Y + GameState->BoardInstance.Slots[i][j].Bottom)
+				if (HitPoint.Y >= GameState->Slots[i].Position[j].Y - GameState->Slots[i].Top[j] && HitPoint.Y <= GameState->Slots[i].Position[j].Y + GameState->Slots[i].Bottom[j])
 				{
 					I = i;
 					J = j;
@@ -207,6 +239,7 @@ int AChessPlayerController::GetSlotIndexFromWorld(FVector HitPoint, int& I, int 
 
 void AChessPlayerController::MouseLeftClick()
 {
+
 	FHitResult Hit;
 
 	GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(ECC_Visibility), false, Hit);
@@ -235,22 +268,24 @@ void AChessPlayerController::MouseLeftClick()
 					{
 						int SlotToMoveToI = ChessPiece->CurrentSlotI;
 						int SlotToMoveToJ = ChessPiece->CurrentSlotJ;
-						if (GameState->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant != nullptr)
+						if (OCData[SlotToMoveToI].Occupant[SlotToMoveToJ] != nullptr)
 						{
-							GameState->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant->Destroy();
-							GameState->BoardInstance.Slots[SlotToMoveToI][SlotToMoveToJ].Occupant = nullptr;
+							//GameState->Slots[SlotToMoveToI].Occupant[SlotToMoveToJ]->Destroy();
+							SetOccupant(SlotToMoveToI, SlotToMoveToJ, nullptr);
 						}
 
-						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
-						LastChessPiece->CurrentSlotI = SlotToMoveToI;
-						LastChessPiece->CurrentSlotJ = SlotToMoveToJ;
+						SetOccupant(LastChessPiece->CurrentSlotI, LastChessPiece->CurrentSlotJ, nullptr);
+						LastChessPiece->MultiplayerSafeMoveSelected(SlotToMoveToI, SlotToMoveToJ);
+
 						LastChessPiece->isOnStartingSquare = false;
-						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
+						SetOccupant(SlotToMoveToI, SlotToMoveToJ, LastChessPiece);
 
 						// Remove Selection and Board Highlighting
 						RemoveHighlighting(LastChessPiece);
 
-						GameState->RunCameraAnimation = true;
+						// Next player to move
+						UpdateSlots();
+
 						return;
 					}
 					else
@@ -269,7 +304,7 @@ void AChessPlayerController::MouseLeftClick()
 			}
 			else if(PlayerType == ChessPiece->type)
 			{
-				ChessPiece->ToggleSelected();
+				ChessPiece->MultiplayerSafeToggleSelected();
 				GameState->CurrentlySelectedActor = ChessPiece;
 				LastSelectedActor = ChessPiece;
 			}
@@ -290,19 +325,24 @@ void AChessPlayerController::MouseLeftClick()
 					if (LastChessPiece->isValidMove(SlotPointedAtI, SlotPointedAtJ))
 					{
 						// Check if there is a chesspiece in the spot you want to move, so you can take it.
-						if (GameState->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant != nullptr)
+						if (OCData[SlotPointedAtI].Occupant[SlotPointedAtJ] != nullptr)
 						{
-							GameState->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant->Destroy();
-							GameState->BoardInstance.Slots[SlotPointedAtI][SlotPointedAtJ].Occupant = nullptr;
+							//GameState->Slots[SlotPointedAtI].Occupant[SlotPointedAtJ]->Destroy();
+							SetOccupant(SlotPointedAtI, SlotPointedAtJ, nullptr);
 						}
 
-						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = nullptr;
-						LastChessPiece->CurrentSlotI = SlotPointedAtI;
-						LastChessPiece->CurrentSlotJ = SlotPointedAtJ;
+						SetOccupant(LastChessPiece->CurrentSlotI, LastChessPiece->CurrentSlotJ, nullptr);
+						LastChessPiece->MultiplayerSafeMoveSelected(SlotPointedAtI, SlotPointedAtJ);
 						LastChessPiece->isOnStartingSquare = false;
-						GameState->BoardInstance.Slots[LastChessPiece->CurrentSlotI][LastChessPiece->CurrentSlotJ].Occupant = LastChessPiece;
 
-						GameState->RunCameraAnimation = true;
+						SetOccupant(SlotPointedAtI, SlotPointedAtJ, nullptr);
+
+						// Next player turn...
+						UpdateSlots();
+
+						RemoveHighlighting(LastChessPiece);
+
+						return;
 					}
 				}
 
@@ -330,4 +370,206 @@ void AChessPlayerController::RemoveHighlighting(AChessPiece * LastChessPiece)
 	GameState->CurrentlySelectedActor = nullptr;
 	Cast<AChessBoardActor>(GameState->HighlightController)->SetAllOff();
 	Cast<AChessPiece>(LastMovesHighlightedActor)->MovesAreHighlighted = false;
+}
+
+void AChessPlayerController::SpawnPieces(AActor * OwnerController, int type)
+{
+	UE_LOG(LogTemp, Warning, TEXT("SpawnPieces called on Dedicated Server"));
+	int counter = 0;
+	if (type == 0)
+	{
+		// Spawn 8*2 pawns
+		for (int i = 0; i < 2; i++)
+		{
+			for (int j = 0; j < 8; j++)
+			{
+				if (counter == 0 || counter == 7)
+					SpawnRookAtSlot(i, j, 0, OwnerController);
+				else if (counter == 1 || counter == 6)
+					SpawnKnightAtSlot(i, j, 0, OwnerController);
+				else if (counter == 2 || counter == 5)
+					SpawnBishopAtSlot(i, j, 0, OwnerController);
+				else if (counter == 3)
+					SpawnQueenAtSlot(i, j, 0, OwnerController);
+				else if (counter == 4)
+					SpawnKingAtSlot(i, j, 0, OwnerController);
+				else
+					SpawnPawnAtSlot(i, j, 0, OwnerController);
+				//UE_LOG(LogTemp, Warning, TEXT("%s"), *FString::FromInt(counter));
+				counter++;
+			}
+		}
+	}
+	else
+	{
+
+		counter = 0;
+		for (int i = 7; i > 5; i--)
+		{
+			for (int j = 0; j < 8; j++)
+			{
+				if (counter == 0 || counter == 7)
+					SpawnRookAtSlot(i, j, 1, OwnerController);
+				else if (counter == 1 || counter == 6)
+					SpawnKnightAtSlot(i, j, 1, OwnerController);
+				else if (counter == 2 || counter == 5)
+					SpawnBishopAtSlot(i, j, 1, OwnerController);
+				else if (counter == 3)
+					SpawnQueenAtSlot(i, j, 1, OwnerController);
+				else if (counter == 4)
+					SpawnKingAtSlot(i, j, 1, OwnerController);
+				else
+					SpawnPawnAtSlot(i, j, 1, OwnerController);
+
+				counter++;
+			}
+		}
+	}
+}
+
+void AChessPlayerController::SpawnPawnAtSlot(int i, int j, int type, AActor* Owner)
+{
+	FTransform SpawnTransform(FRotator(0, 0, 0), GameState->Slots[i].Position[j]);
+
+	AChessPawn* DeferredChessPawn = Cast<AChessPawn>(UGameplayStatics::BeginDeferredActorSpawnFromClass(this, AChessPawn::StaticClass(), SpawnTransform));
+
+	if (DeferredChessPawn != nullptr)
+	{
+		DeferredChessPawn->SetOwner(Owner);
+		DeferredChessPawn->SetVariables(type);
+		DeferredChessPawn->CurrentSlotI = i;
+		DeferredChessPawn->CurrentSlotJ = j;
+
+		GameState->Slots[i].Occupant[j] = Cast<AActor>(DeferredChessPawn);
+		UGameplayStatics::FinishSpawningActor(DeferredChessPawn, SpawnTransform);
+	}
+}
+
+void AChessPlayerController::SpawnRookAtSlot(int i, int j, int type, AActor* Owner)
+{
+	FTransform SpawnTransform(FRotator(0, 0, 0), GameState->Slots[i].Position[j]);
+
+	AChessRook* DeferredChessRook = Cast<AChessRook>(UGameplayStatics::BeginDeferredActorSpawnFromClass(this, AChessRook::StaticClass(), SpawnTransform));
+
+	if (DeferredChessRook != nullptr)
+	{
+		DeferredChessRook->SetOwner(Owner);
+		DeferredChessRook->SetVariables(type);
+		DeferredChessRook->CurrentSlotI = i;
+		DeferredChessRook->CurrentSlotJ = j;
+
+		GameState->Slots[i].Occupant[j] = Cast<AActor>(DeferredChessRook);
+		UGameplayStatics::FinishSpawningActor(DeferredChessRook, SpawnTransform);
+	}
+}
+
+void AChessPlayerController::SpawnKnightAtSlot(int i, int j, int type, AActor* Owner)
+{
+	float Yaw = 0;
+	if (type == 1)
+		Yaw = 180;
+
+	FTransform SpawnTransform(FRotator(0, Yaw, 0), GameState->Slots[i].Position[j]);
+
+	AChessKnight* DeferredChessKnight = Cast<AChessKnight>(UGameplayStatics::BeginDeferredActorSpawnFromClass(this, AChessKnight::StaticClass(), SpawnTransform));
+
+	if (DeferredChessKnight != nullptr)
+	{
+		DeferredChessKnight->SetOwner(Owner);
+		DeferredChessKnight->SetVariables(type);
+		DeferredChessKnight->CurrentSlotI = i;
+		DeferredChessKnight->CurrentSlotJ = j;
+
+		GameState->Slots[i].Occupant[j] = Cast<AActor>(DeferredChessKnight);
+		UGameplayStatics::FinishSpawningActor(DeferredChessKnight, SpawnTransform);
+	}
+}
+
+void AChessPlayerController::SpawnBishopAtSlot(int i, int j, int type, AActor* Owner)
+{
+	FTransform SpawnTransform(FRotator(0, 0, 0), GameState->Slots[i].Position[j]);
+
+	AChessBishop* DeferredChessBishop = Cast<AChessBishop>(UGameplayStatics::BeginDeferredActorSpawnFromClass(this, AChessBishop::StaticClass(), SpawnTransform));
+
+	if (DeferredChessBishop != nullptr)
+	{
+		DeferredChessBishop->SetOwner(Owner);
+		DeferredChessBishop->SetVariables(type);
+		DeferredChessBishop->CurrentSlotI = i;
+		DeferredChessBishop->CurrentSlotJ = j;
+
+		GameState->Slots[i].Occupant[j] = Cast<AActor>(DeferredChessBishop);
+		UGameplayStatics::FinishSpawningActor(DeferredChessBishop, SpawnTransform);
+	}
+}
+
+void AChessPlayerController::SpawnKingAtSlot(int i, int j, int type, AActor* Owner)
+{
+	FTransform SpawnTransform(FRotator(0, 0, 0), GameState->Slots[i].Position[j]);
+
+	AChessKing* DeferredChessKing = Cast<AChessKing>(UGameplayStatics::BeginDeferredActorSpawnFromClass(this, AChessKing::StaticClass(), SpawnTransform));
+
+	if (DeferredChessKing != nullptr)
+	{
+		DeferredChessKing->SetOwner(Owner);
+		DeferredChessKing->SetVariables(type);
+		DeferredChessKing->CurrentSlotI = i;
+		DeferredChessKing->CurrentSlotJ = j;
+
+		GameState->Slots[i].Occupant[j] = Cast<AActor>(DeferredChessKing);
+		UGameplayStatics::FinishSpawningActor(DeferredChessKing, SpawnTransform);
+	}
+}
+
+void AChessPlayerController::SpawnQueenAtSlot(int i, int j, int type, AActor* Owner)
+{
+	FTransform SpawnTransform(FRotator(0, 0, 0), GameState->Slots[i].Position[j]);
+
+	AChessQueen* DeferredChessQueen = Cast<AChessQueen>(UGameplayStatics::BeginDeferredActorSpawnFromClass(this, AChessQueen::StaticClass(), SpawnTransform));
+
+	if (DeferredChessQueen != nullptr)
+	{
+		DeferredChessQueen->SetOwner(Owner);
+		DeferredChessQueen->SetVariables(type);
+		DeferredChessQueen->CurrentSlotI = i;
+		DeferredChessQueen->CurrentSlotJ = j;
+
+		GameState->Slots[i].Occupant[j] = Cast<AActor>(DeferredChessQueen);
+		UGameplayStatics::FinishSpawningActor(DeferredChessQueen, SpawnTransform);
+	}
+}
+
+void AChessPlayerController::UpdateSlots_Implementation()
+{
+	for (int i = 0; i < 8; i++)
+	{
+		for (int j = 0; j < 8; j++)
+		{
+			OCData[i].Occupant[j] = GameState->Slots[i].Occupant[j];
+		}
+	}
+}
+
+bool AChessPlayerController::UpdateSlots_Validate()
+{
+	return true;
+}
+
+void AChessPlayerController::SetOccupant_Implementation(int I, int J, AActor * Actor)
+{
+	GameState->Slots[I].Occupant[J] = Actor;
+	UpdateSlots_Implementation();	// Update the player controller occupation slots...
+}
+
+bool AChessPlayerController::SetOccupant_Validate(int I, int J, AActor * Actor)
+{
+	return true;
+}
+
+void AChessPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AChessPlayerController, PlayerType);
+	DOREPLIFETIME(AChessPlayerController, OCData);
 }

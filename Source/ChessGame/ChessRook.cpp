@@ -20,8 +20,6 @@ AChessRook::AChessRook()
 	{
 		Mesh = MeshLoader.Object;
 	}
-
-	SetReplicates(true);
 }
 
 void AChessRook::BeginPlay()

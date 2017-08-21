@@ -21,12 +21,23 @@ AChessBishop::AChessBishop()
 		Mesh = MeshLoader.Object;
 	}
 
-	SetReplicates(true);
+	bReplicates = true;
+	bAlwaysRelevant = true;
 }
 
 void AChessBishop::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (GetNetMode() == ENetMode::NM_DedicatedServer)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BeginPlay Ran On Server"));
+	}
+
+	if (GetNetMode() == ENetMode::NM_Client)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BeginPlay Ran On Client"));
+	}
 
 	InitializeAllowedMoves();
 

@@ -29,7 +29,6 @@ public:
 	void SetAllOff();
 	void ClearAllColor();
 
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 
 	UMaterialInstanceDynamic* MaterialToUse = nullptr;
 	UMaterialInstanceConstant* MaterialConstantInstance = nullptr;
@@ -37,10 +36,10 @@ public:
 	UStaticMesh* Mesh = nullptr;
 
 	FString *ColorNames = nullptr;
-	UPROPERTY(Replicated)
+
 	TArray<FLinearColor> ColorValues;
 	FString *OnOffNames = nullptr;
-	UPROPERTY(Replicated)
+
 	TArray<float> OnOffValues;
 
 	float Timer = 0.f;

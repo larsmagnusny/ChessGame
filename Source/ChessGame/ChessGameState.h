@@ -3,12 +3,30 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ChessBoard.h"
 #include "GameFramework/GameState.h"
 #include "GameFramework/Actor.h"
 #include "ChessGameState.generated.h"
 
 class AChessGameGameModeBase;
+
+USTRUCT()
+struct FSlotData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector Position[8];
+	UPROPERTY()
+	float Left[8];
+	UPROPERTY()
+	float Right[8];
+	UPROPERTY()
+	float Top[8];
+	UPROPERTY()
+	float Bottom[8];
+	UPROPERTY()
+	AActor* Occupant[8];
+};
 
 UCLASS()
 class CHESSGAME_API AChessGameState : public AGameState
@@ -19,41 +37,17 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction & ThisTickFunction) override;
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 
 	bool IsClickable(AActor* Actor);
 
-	void SpawnPieces();
-
-	void SpawnPawnAtSlot(int i, int j, int type);
-	void SpawnRookAtSlot(int i, int j, int type);
-	void SpawnKnightAtSlot(int i, int j, int type);
-	void SpawnBishopAtSlot(int i, int j, int type);
-	void SpawnKingAtSlot(int i, int j, int type);
-	void SpawnQueenAtSlot(int i, int j, int type);
-
-	UPROPERTY(Replicated)
-	float RandomFloat = 0.f;
-
-	UPROPERTY(Replicated)
+	void DebugData();
 	int CurrentPlayers = 0;
-
-	UPROPERTY(Replicated)
 	bool NextPlayer = false;
 
-	UPROPERTY(Replicated, BlueprintReadWrite, Category = "Run Camera Turn Animation?")
-	bool RunCameraAnimation = false;
-
 	TArray<AActor*> ClickableActors;
-
 	AActor* CurrentlySelectedActor = nullptr;
-
-	ChessBoard BoardInstance;
-
 	AActor* HighlightController = nullptr;
-
-	AChessGameGameModeBase* GameMode = nullptr;
-
+	FSlotData Slots[8];
 	FVector StartPosition = FVector(-18.f, 18.f, 1.f);
 	float Delta = 5.13f;
 };

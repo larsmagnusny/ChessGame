@@ -20,9 +20,6 @@ AChessKnight::AChessKnight()
 	{
 		Mesh = MeshLoader.Object;
 	}
-
-	SetReplicates(true);
-
 }
 
 void AChessKnight::BeginPlay()

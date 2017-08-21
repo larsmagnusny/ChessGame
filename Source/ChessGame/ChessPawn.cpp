@@ -12,7 +12,6 @@ AChessPawn::AChessPawn()
 
 	bool AllSuccessfull = true;
 
-
 	const ConstructorHelpers::FObjectFinder<UStaticMesh> MeshLoader(TEXT("StaticMesh'/Game/Pawn.Pawn'"));
 
 	if (!MeshLoader.Succeeded())

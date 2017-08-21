@@ -21,8 +21,6 @@ AChessKing::AChessKing()
 	{
 		Mesh = MeshLoader.Object;
 	}
-
-	SetReplicates(true);
 }
 
 void AChessKing::BeginPlay()
