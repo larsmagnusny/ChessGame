@@ -109,7 +109,6 @@ bool AChessBishop::isValidMove(int IndexToMoveToI, int IndexToMoveToJ)
 	
 	if (MovingSideways)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Moving sideways!"));
 		int DeltaISign = FMath::Sign<int>(DeltaI);
 		int DeltaJSign = FMath::Sign<int>(DeltaJ);
 
@@ -127,14 +126,12 @@ bool AChessBishop::isValidMove(int IndexToMoveToI, int IndexToMoveToJ)
 			{
 				if (ChessPiece->type == this->type)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("Space already occupied by your piece"));
 					return false;
 				}
 				else
 				{
 					if (NextI != IndexToMoveToI || NextI != IndexToMoveToI)
 					{
-						UE_LOG(LogTemp, Warning, TEXT("Can't jump over other pieces"));
 						return false;
 					}
 				}
@@ -147,4 +144,12 @@ bool AChessBishop::isValidMove(int IndexToMoveToI, int IndexToMoveToJ)
 	{
 		return false;
 	}
+}
+
+void AChessBishop::InitializeAllowedMoves()
+{
+	AllowedMoves.Add(FVector2D(7, 7));
+	AllowedMoves.Add(FVector2D(7, -7));
+	AllowedMoves.Add(FVector2D(-7, 7));
+	AllowedMoves.Add(FVector2D(-7, -7));
 }

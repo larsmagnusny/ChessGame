@@ -42,7 +42,7 @@ public:
 
 	void DebugData();
 	int CurrentPlayers = 0;
-	bool NextPlayer = false;
+	bool PlayerTurn = false;
 
 	TArray<AActor*> ClickableActors;
 	AActor* CurrentlySelectedActor = nullptr;

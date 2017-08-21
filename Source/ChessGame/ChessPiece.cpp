@@ -8,20 +8,10 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "ChessGameState.h"
 #include "ChessPlayerController.h"
+#include "EngineUtils.h"
 
 AChessPiece::AChessPiece()
 {
-	if (GetNetMode() == ENetMode::NM_DedicatedServer)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ChessPiece Constructor ran on Server"));
-		
-	}
-
-	if (GetNetMode() == ENetMode::NM_Client)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ChessPiece Constructor ran on Client"));
-	}
-
 	const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> WhiteMaterialLoader(TEXT("MaterialInstanceConstant'/Game/White_Inst.White_Inst'"));
 	const ConstructorHelpers::FObjectFinder<UMaterialInstanceConstant> BlackMaterialLoader(TEXT("MaterialInstanceConstant'/Game/Black_Inst.Black_Inst'"));
 
@@ -53,15 +43,6 @@ void AChessPiece::StaticLoadMesh()
 
 void AChessPiece::InitMeshAndMaterial()
 {
-	/*if (GetNetMode() == ENetMode::NM_DedicatedServer)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ChessPiece Beginplay ran on Server"));
-	}
-
-	if (GetNetMode() == ENetMode::NM_Client)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ChessPiece Beginplay ran on Client"));
-	}*/
 
 	UStaticMeshComponent* MeshComponent = GetStaticMeshComponent();
 
@@ -69,8 +50,6 @@ void AChessPiece::InitMeshAndMaterial()
 	MeshComponent->SetMobility(EComponentMobility::Movable);
 
 	MeshComponent->SetStaticMesh(Mesh);
-
-	//UE_LOG(LogTemp, Warning, TEXT("BEGIN PLAY CALLED for piece!"));
 
 	switch (type)
 	{
@@ -181,7 +160,6 @@ void AChessPiece::MultiplayerSafeMoveSelected(int ToI, int ToJ)
 void AChessPiece::ToggleHighlight_Implementation()
 {
 	IsHighlighted = true;
-	UE_LOG(LogTemp, Warning, TEXT("Highlight has been sendt to server"));
 }
 
 bool AChessPiece::ToggleHighlight_Validate()
@@ -192,7 +170,6 @@ bool AChessPiece::ToggleHighlight_Validate()
 void AChessPiece::RemoveHighlight_Implementation()
 {
 	IsHighlighted = false;
-	UE_LOG(LogTemp, Warning, TEXT("Highlight has been sendt to server"));
 }
 
 bool AChessPiece::RemoveHighlight_Validate()
@@ -240,12 +217,10 @@ void AChessPiece::UpdateHighlight()
 
 	if (IsHighlighted && LastIsHighlighted != IsHighlighted || (Selected && LastIsSelected != Selected))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%s has been highlighted"), *GetName());
 		MaterialToUse->SetScalarParameterValue("Emissive", 1.f);
 	}
 	else if (!IsHighlighted && LastIsHighlighted != IsHighlighted || (!Selected && LastIsSelected != Selected))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%s has had highlighting removed"), *GetName());
 		MaterialToUse->SetScalarParameterValue("Emissive", 0.f);
 		
 	}
@@ -290,9 +265,13 @@ AActor * AChessPiece::GetActorFromSlot(int i, int j)
 	if (i >= 8 || i < 0 || j >= 8 || j < 0)
 		return nullptr;
 
-	AChessPlayerController* PlayerController = Cast<AChessPlayerController>(GetWorld()->GetFirstPlayerController());
+	for (TActorIterator<AChessPiece> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+	{
+		if ((*ActorItr)->CurrentSlotI == i && (*ActorItr)->CurrentSlotJ == j)
+			return *ActorItr;
+	}
 
-	return PlayerController->OCData[i].Occupant[j];
+	return nullptr;
 }
 
 bool AChessPiece::isPieceInSlot(int i, int j)
@@ -300,15 +279,12 @@ bool AChessPiece::isPieceInSlot(int i, int j)
 	if (i >= 8 || i < 0 || j >= 8 || j < 0)
 		return true;
 
-	AChessPlayerController* PlayerController = Cast<AChessPlayerController>(GetWorld()->GetFirstPlayerController());
-
-	if (PlayerController->OCData[i].Occupant[j] == nullptr)
+	if (GetActorFromSlot(i, j) == nullptr)
 	{
 		return false;
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Piece in next spot: %s"), *PlayerController->OCData[i].Occupant[j]->GetName());
 		return true;
 	}
 }

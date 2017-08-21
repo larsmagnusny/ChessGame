@@ -61,6 +61,9 @@ public:
 
 	bool CameraViewSet = false;
 
+	UPROPERTY(Replicated)
+	bool PlayerTurn = false;
+
 	ACameraActor* Camera = nullptr;
 
 	UPROPERTY(Replicated)
@@ -78,6 +81,16 @@ public:
 	void SetOccupant(int I, int J, AActor* Actor);
 	virtual void SetOccupant_Implementation(int I, int J, AActor* Actor);
 	virtual bool SetOccupant_Validate(int I, int J, AActor* Actor);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void DestroyActor(AActor* Actor);
+	virtual void DestroyActor_Implementation(AActor* Actor);
+	virtual bool DestroyActor_Validate(AActor* Actor);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void NextTurn();
+	virtual void NextTurn_Implementation();
+	virtual bool NextTurn_Validate();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 };

@@ -32,8 +32,6 @@ void AChessGameGameModeBase::BeginPlay()
 
 		UE_LOG(LogTemp, Warning, TEXT("Game is standalone"), *WorldName);
 		UE_LOG(LogTemp, Warning, TEXT("Loaded map: %s"), *WorldName);
-
-		UGameplayStatics::OpenLevel(GetWorld(), "127.0.0.1");
 	}
 	else
 	{
@@ -41,7 +39,5 @@ void AChessGameGameModeBase::BeginPlay()
 
 		UE_LOG(LogTemp, Warning, TEXT("Loaded map: %s"), *WorldName);
 	}
-
-	
 }
 

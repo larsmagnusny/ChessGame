@@ -19,4 +19,5 @@ public:
 	virtual void GetPossibleMoveHighlight(TArray<int> &indexes) override;
 	virtual void TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction & ThisTickFunction) override;
 	virtual bool isValidMove(int IndexToMoveToI, int IndexToMoveToJ) override;
+	virtual void InitializeAllowedMoves() override;
 };

@@ -82,8 +82,11 @@ void AChessPlayerController::TickActor(float DeltaTime, ELevelTick TickType, FAc
 	Super::TickActor(DeltaTime, TickType, ThisTickFunction);
 	
 	if (GetNetMode() == ENetMode::NM_DedicatedServer)
+	{
+		UpdateSlots();
+		PlayerTurn = GameState->PlayerTurn;
 		return;
-
+	}
 	FHitResult Hit;
 
 	GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(ECollisionChannel::ECC_Visibility), true, Hit);
@@ -123,7 +126,6 @@ void AChessPlayerController::TickActor(float DeltaTime, ELevelTick TickType, FAc
 
 		CameraViewSet = true;
 
-		UpdateSlots();
 	}
 }
 
@@ -133,7 +135,6 @@ void AChessPlayerController::BeginPlayingState()
 
 void AChessPlayerController::UpdateHighlight(FHitResult &Hit)
 {
-	UE_LOG(LogTemp, Warning, TEXT("PlayerType: %s"), *FString::FromInt(PlayerType));
 	if (GetNetMode() != ENetMode::NM_DedicatedServer)
 	{
 		if (Hit.Actor != nullptr)
@@ -239,6 +240,8 @@ int AChessPlayerController::GetSlotIndexFromWorld(FVector HitPoint, int& I, int 
 
 void AChessPlayerController::MouseLeftClick()
 {
+	if ((int)PlayerTurn != PlayerType)
+		return;
 
 	FHitResult Hit;
 
@@ -268,9 +271,9 @@ void AChessPlayerController::MouseLeftClick()
 					{
 						int SlotToMoveToI = ChessPiece->CurrentSlotI;
 						int SlotToMoveToJ = ChessPiece->CurrentSlotJ;
-						if (OCData[SlotToMoveToI].Occupant[SlotToMoveToJ] != nullptr)
+						if (ChessPiece->isPieceInSlot(SlotToMoveToI, SlotToMoveToJ))
 						{
-							//GameState->Slots[SlotToMoveToI].Occupant[SlotToMoveToJ]->Destroy();
+							DestroyActor(ChessPiece->GetActorFromSlot(SlotToMoveToI, SlotToMoveToJ));
 							SetOccupant(SlotToMoveToI, SlotToMoveToJ, nullptr);
 						}
 
@@ -284,8 +287,8 @@ void AChessPlayerController::MouseLeftClick()
 						RemoveHighlighting(LastChessPiece);
 
 						// Next player to move
-						UpdateSlots();
 
+						NextTurn();
 						return;
 					}
 					else
@@ -325,9 +328,10 @@ void AChessPlayerController::MouseLeftClick()
 					if (LastChessPiece->isValidMove(SlotPointedAtI, SlotPointedAtJ))
 					{
 						// Check if there is a chesspiece in the spot you want to move, so you can take it.
-						if (OCData[SlotPointedAtI].Occupant[SlotPointedAtJ] != nullptr)
+						if (LastChessPiece->isPieceInSlot(SlotPointedAtI, SlotPointedAtJ))
 						{
 							//GameState->Slots[SlotPointedAtI].Occupant[SlotPointedAtJ]->Destroy();
+							DestroyActor(LastChessPiece->GetActorFromSlot(SlotPointedAtI, SlotPointedAtJ));
 							SetOccupant(SlotPointedAtI, SlotPointedAtJ, nullptr);
 						}
 
@@ -338,9 +342,10 @@ void AChessPlayerController::MouseLeftClick()
 						SetOccupant(SlotPointedAtI, SlotPointedAtJ, nullptr);
 
 						// Next player turn...
-						UpdateSlots();
 
 						RemoveHighlighting(LastChessPiece);
+
+						NextTurn();
 
 						return;
 					}
@@ -566,10 +571,33 @@ bool AChessPlayerController::SetOccupant_Validate(int I, int J, AActor * Actor)
 	return true;
 }
 
+void AChessPlayerController::DestroyActor_Implementation(AActor * Actor)
+{
+	UE_LOG(LogTemp, Warning, TEXT("Destroying actor"));
+	Actor->Destroy();
+}
+
+bool AChessPlayerController::DestroyActor_Validate(AActor * Actor)
+{
+	return Actor != nullptr;
+}
+
+void AChessPlayerController::NextTurn_Implementation()
+{
+	GameState->PlayerTurn = !GameState->PlayerTurn;
+	PlayerTurn = GameState->PlayerTurn;
+}
+
+bool AChessPlayerController::NextTurn_Validate()
+{
+	return true;
+}
+
 void AChessPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AChessPlayerController, PlayerType);
 	DOREPLIFETIME(AChessPlayerController, OCData);
+	DOREPLIFETIME(AChessPlayerController, PlayerTurn);
 }
